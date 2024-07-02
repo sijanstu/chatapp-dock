@@ -112,7 +112,7 @@ for message in st.session_state.messages:
     st.markdown("---")
 
 # User input
-user_input = st.text_input("Your question:", key=f"user_input_{st.session_state.user_input_key}")
+user_input = st.text_area("Your question:", key=f"user_input_{st.session_state.user_input_key}", height=150)
 
 if st.button("Send"):
     if user_input:
