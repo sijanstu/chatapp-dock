@@ -4,3 +4,4 @@ requests
 sseclient_py
 urllib3
 streamlit_ace
+edge-tts

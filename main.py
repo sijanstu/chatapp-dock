@@ -7,6 +7,8 @@ import urllib3
 import re
 from streamlit_ace import st_ace
 
+from tts import text_to_speech
+
 st.title("Chat with Advanced Coding Assistant 🤖")
 
 # Initialize chat history
@@ -50,7 +52,7 @@ def get_ai_response(user_input):
     }
     data = {
         "model": "claude-3-haiku-20240307",
-        "messages": [{"role": "user", "content": user_input}]
+        "messages": [{"role": "user", "content": "provide short and sweet answers for: "+user_input}]
     }
     response = with_requests(url, headers, json.dumps(data))
     client = sseclient.SSEClient(response)
@@ -67,8 +69,13 @@ def get_ai_response(user_input):
                 pass
         else:
             temp_response.empty()
-            break
+
     return ai_full_response
+
+
+def get_audio_and_add_to_chat(ai_full_response):
+    audiofile = text_to_speech(ai_full_response)
+    st.audio(audiofile, format='audio/mp3', start_time=0, autoplay=True)
 
 
 # Function to make a request using the requests library
@@ -106,7 +113,7 @@ def handle_input():
             st.session_state.code_snippets.append(code_snippet)
             # snippet_index = len(st.session_state.code_snippets) - 1
             # st.session_state.messages.append({"role": "assistant", "content": assistant_response, "code_snippet": snippet_index})
-
+        get_audio_and_add_to_chat(assistant_response)
 
 # Display the chat messages
 display_messages()
