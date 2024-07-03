@@ -52,7 +52,7 @@ def get_ai_response(user_input):
     }
     data = {
         "model": "claude-3-haiku-20240307",
-        "messages": [{"role": "user", "content": "provide short and sweet answers for: "+user_input}]
+        "messages": [{"role": "user", "content": "provide short and sweet answers for: " + user_input}]
     }
     response = with_requests(url, headers, json.dumps(data))
     client = sseclient.SSEClient(response)
@@ -105,8 +105,12 @@ def handle_input():
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            assistant_response = get_ai_response(prompt)
-            st.markdown(assistant_response)
+            try:
+                assistant_response = get_ai_response(prompt)
+                st.markdown(assistant_response)
+            except urllib3.exceptions.MaxRetryError:
+                assistant_response = ("I am sorry, I am unable to process your request at the moment. Please try again "
+                                      "later.")
         st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         new_code_snippets = extract_code_snippets(assistant_response)
         for code_snippet in new_code_snippets:
@@ -114,6 +118,7 @@ def handle_input():
             # snippet_index = len(st.session_state.code_snippets) - 1
             # st.session_state.messages.append({"role": "assistant", "content": assistant_response, "code_snippet": snippet_index})
         get_audio_and_add_to_chat(assistant_response)
+
 
 # Display the chat messages
 display_messages()
