@@ -31,4 +31,7 @@ def remove_code_snippets(text):
     text = re.sub(r"\[.*?\]\(.*?\)", "", text)
     # remove backticks
     text = re.sub(r"`.*?`", "", text)
+    # remove asterisks
+    text = re.sub(r"\*.*?\*", "", text)
+    text = re.sub(r"[*_]", "", text)
     return text
