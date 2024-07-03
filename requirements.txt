@@ -1,3 +1,6 @@
+streamlit-chat
 streamlit
 requests
-sseclient-py
+sseclient_py
+urllib3
+streamlit_ace

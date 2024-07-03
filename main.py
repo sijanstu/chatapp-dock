@@ -1,135 +1,156 @@
-import streamlit as st
-import requests
+import asyncio
 import json
+import requests
+import streamlit as st
 import sseclient
+import urllib3
 import re
+from streamlit_ace import st_ace
 
-
-def get_ai_response(user_input):
-    url = "https://duckduckgo.com/duckchat/v1/chat"
-
-    headers = {
-        'accept': 'text/event-stream',
-        'accept-language': 'en-GB,en;q=0.8',
-        'content-type': 'application/json',
-        'cookie': 'dcm=1',
-        'origin': 'https://duckduckgo.com',
-        'priority': 'u=1, i',
-        'referer': 'https://duckduckgo.com/',
-        'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Brave";v="126"',
-        'sec-ch-ua-mobile': '?1',
-        'sec-ch-ua-platform': '"Android"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'sec-gpc': '1',
-        'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
-        'x-vqd-4': '4-17083453430632415906084007210612747928'
-    }
-
-    data = {
-        "model": "claude-3-haiku-20240307",
-        "messages": [
-            {
-                "role": "user",
-                "content": user_input
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, data=json.dumps(data), stream=True)
-    client = sseclient.SSEClient(response)
-
-    full_response = ""
-    for event in client.events():
-        if event.data != '[DONE]':
-            try:
-                parsed_data = json.loads(event.data)
-                if 'message' in parsed_data:
-                    full_response += parsed_data['message']
-            except json.JSONDecodeError:
-                pass
-
-    return full_response
-
-
-def format_message(message):
-    # Function to format code blocks
-    def replace_code_block(match):
-        code = match.group(2)
-        language = match.group(1) if match.group(1) else ""
-        return f"```{language}\n{code}\n```"
-
-    # Replace ```language\ncode``` blocks
-    formatted = re.sub(r'```(\w*)\n(.*?)```', replace_code_block, message, flags=re.DOTALL)
-
-    # Replace single backticks with inline code format
-    formatted = re.sub(r'`([^`\n]+)`', r'`\1`', formatted)
-
-    return formatted
-
-
-def extract_code_blocks(message):
-    code_blocks = []
-    code_pattern = re.compile(r'```(\w*)\n(.*?)```', re.DOTALL)
-    matches = code_pattern.finditer(message)
-
-    for i, match in enumerate(matches, 1):
-        language = match.group(1) if match.group(1) else "text"
-        code = match.group(2)
-        filename = f"code_snippet_{i}.{language}" if language != "text" else f"code_snippet_{i}.txt"
-        code_blocks.append((filename, language, code))
-
-    return code_blocks
-
-
-st.title("Chat with DuckDuckGo AI")
+st.title("Chat with Advanced Coding Assistant 🤖")
 
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Initialize a key for the input field
-if "user_input_key" not in st.session_state:
-    st.session_state.user_input_key = 0
+# Initialize code snippets state
+if "code_snippets" not in st.session_state:
+    st.session_state.code_snippets = []
 
-# Display chat messages from history
-for message in st.session_state.messages:
-    role = message["role"]
-    content = format_message(message["content"])
 
-    if role == "user":
-        st.markdown(f"**You:** {content}")
-    else:
-        st.markdown(f"**Assistant:** {content}")
+# Function to extract code snippets from markdown text
+def extract_code_snippets(markdown_text):
+    code_snippets = re.findall(r'```(?:[a-zA-Z]*\n)?([\s\S]*?)```', markdown_text)
+    return code_snippets
 
-        # Extract and display code blocks
-        code_blocks = extract_code_blocks(message["content"])
-        for filename, language, code in code_blocks:
-            with st.expander(f"Code: {filename}"):
-                st.code(code, language=language)
 
-    st.markdown("---")
+# Function to get the vqd4 token
+def vqd4():
+    url = "https://duckduckgo.com/duckchat/v1/status"
+    vqd4payload = {}
+    headers = {
+        'sec-gpc': '1',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/126.0.0.0 Safari/537.36',
+        'x-vqd-accept': '1'
+    }
+    response = requests.request("GET", url, headers=headers, data=vqd4payload)
+    return response.headers['X-Vqd-4']
 
-# User input
-user_input = st.text_area("Your question:", key=f"user_input_{st.session_state.user_input_key}", height=150)
 
-if st.button("Send"):
-    if user_input:
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_input})
+# Function to get AI response from DuckDuckGo
+def get_ai_response(user_input):
+    url = 'https://duckduckgo.com/duckchat/v1/chat'
+    headers = {
+        'accept': 'text/event-stream',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/126.0.0.0 Safari/537.36',
+        'x-vqd-4': vqd4() if not st.session_state.get('vqd4l') else st.session_state.vqd4l,
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "model": "claude-3-haiku-20240307",
+        "messages": [{"role": "user", "content": user_input}]
+    }
+    response = with_requests(url, headers, json.dumps(data))
+    client = sseclient.SSEClient(response)
+    ai_full_response = ""
+    temp_response = st.empty()
+    for event in client.events():
+        if event.data != '[DONE]':
+            try:
+                parsed_data = json.loads(event.data)
+                if 'message' in parsed_data:
+                    ai_full_response += parsed_data['message']
+                    temp_response.markdown(ai_full_response)
+            except json.JSONDecodeError:
+                pass
+        else:
+            temp_response.empty()
+            break
+    return ai_full_response
 
-        # Get AI response
-        ai_response = get_ai_response(user_input)
 
-        # Add AI response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": ai_response})
+# Function to make a request using the requests library
+def with_requests(url, headers, data):
+    return requests.post(url, headers=headers, data=data, stream=True)
 
-        # Increment the key to reset the input field
-        st.session_state.user_input_key += 1
 
-        # Rerun the app to update the chat display
-        st.experimental_rerun()
+# Function to display chat messages
+def display_messages():
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            content = message["content"]
+            if message["role"] == "assistant" and 'code_snippet' in message:
+                file_name = f"Code Snippet {message['code_snippet'] + 1}"
+                if st.button(file_name, key=f"snippet_{message['code_snippet']}"):
+                    st.session_state.selected_code_snippet = st.session_state.code_snippets[message['code_snippet']]
+                    st.session_state.show_editor = True
+            else:
+                st.markdown(content)
 
-st.markdown("---")
-st.markdown("This app uses the DuckDuckGo Chat API with Claude 3 Haiku.")
+
+# Function to handle user input
+def handle_input():
+    prompt = st.chat_input("What is up?")
+    if prompt:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        with st.chat_message("assistant"):
+            assistant_response = get_ai_response(prompt)
+            st.markdown(assistant_response)
+        st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        new_code_snippets = extract_code_snippets(assistant_response)
+        for code_snippet in new_code_snippets:
+            st.session_state.code_snippets.append(code_snippet)
+            # snippet_index = len(st.session_state.code_snippets) - 1
+            # st.session_state.messages.append({"role": "assistant", "content": assistant_response, "code_snippet": snippet_index})
+
+
+# Display the chat messages
+display_messages()
+
+# Handle user input
+handle_input()
+
+
+# Sidebar to display selected code snippet
+# st.sidebar.header("Code Snippet")
+# if st.session_state.get("show_editor", False):
+#     st_ace(
+#         value=st.session_state.selected_code_snippet,
+#         language='java' if 'public class' in st.session_state.selected_code_snippet else 'python',
+#         theme='monokai',
+#         key='ace-editor'
+#     )
+
+
+# Display code snippet cards in the chat
+def add_code_snippet(snippet):
+    file_name = get_ai_response(
+        "Generate a code file name with extension for the code snippet below, provide me a file name and extension only nothitng else. snippet: " + snippet)
+    # st.sidebar.markdown(f"```{file_name}```")
+    # make it copyable
+    st.sidebar.code(file_name, language='python')
+    st.sidebar.code(snippet, language='java' if 'public class' in snippet else 'python')
+
+
+if st.session_state.code_snippets:
+    st.sidebar.header("Code Snippets")
+    st.markdown(
+        """
+        <style>
+        .sidebar .sidebar-content {
+            transition: margin-left .3s;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    for idx, code_snippet in enumerate(st.session_state.code_snippets):
+        # check if code has multiple lines, only display if it has more than 1 line
+        if code_snippet.count('\n') > 1:
+            add_code_snippet(code_snippet)
+        else:
+            st.sidebar.code(code_snippet, language='java' if 'public class' in code_snippet else 'python')
