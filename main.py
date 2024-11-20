@@ -52,7 +52,7 @@ def get_ai_response(user_input):
     }
     data = {
         "model": "claude-3-haiku-20240307",
-        "messages": [{"role": "user", "content": "provide short and sweet answers for: " + user_input}]
+        "messages": [{"role": "user", "content": "provide answer for: " + user_input}]
     }
     response = with_requests(url, headers, json.dumps(data))
     client = sseclient.SSEClient(response)
